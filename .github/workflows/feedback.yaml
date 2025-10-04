@@ -1,0 +1,170 @@
+# This is a GitHub Action workflow that automates feedback for Java assignments.
+# It is designed to be used with GitHub Classroom.
+#
+# How it works:
+# 1. It triggers when a "feedback" pull request is opened or updated.
+# 2. It reads the assignment instructions from the README.md file.
+# 3. It gathers all the Java source code from the `src/main/java` directory.
+# 4. It gathers all the Java test code from the `src/test/java` directory.
+# 5. It sends the instructions, source code, and test code to an LLM on OpenRouter.
+# 6. The LLM generates feedback based on the provided information.
+# 7. The feedback is then posted as a comment on the pull request.
+
+name: AI-Powered Feedback
+
+on:
+  pull_request:
+    types: [ opened, synchronize ]
+    branches:
+      - feedback
+
+jobs:
+  provide_feedback:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    env:
+      OPENROUTER_MODEL: ${{ vars.OPENROUTER_MODEL }}
+      SYSTEM_PROMPT: ${{ vars.SYSTEM_PROMPT }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Read assignment instructions
+        id: instructions
+        run: |
+          # Reads the content of the README.md file into an output variable.
+          # The `EOF` marker is used to handle multi-line file content.
+          echo "instructions=$(cat README.md | sed 's/\"/\\\"/g' | sed 's/$/\\n/' | tr -d '\n' | sed 's/\\n/\\\\n/g')" >> $GITHUB_OUTPUT
+
+      - name: Read source code
+        id: source_code
+        run: |
+          {
+            echo 'source_code<<EOF'
+            find src/main/java -type f -name "*.java" | while read -r file; do
+              echo "=== File: $file ==="
+              cat "$file"
+              echo
+            done
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Read test code
+        id: test_code
+        run: |
+          {
+            echo 'test_code<<EOF'
+            if [ -d "src/test/java" ]; then
+              find src/test/java -type f -name "*.java" | while read -r file; do
+                echo "=== File: $file ==="
+                cat "$file"
+                echo
+              done
+            else
+              echo "No test code found."
+            fi
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
+      - name: Generate AI Feedback
+        id: ai_feedback
+        run: |
+          # This step sends the collected data to the OpenRouter API.
+          INSTRUCTIONS=$(jq -Rs . <<'EOF'
+          ${{ steps.instructions.outputs.instructions }}
+          EOF
+          )
+          SOURCE_CODE=$(jq -Rs . <<'EOF'
+          ${{ steps.source_code.outputs.source_code }}
+          EOF
+          )
+          TEST_CODE=$(jq -Rs . <<'EOF'
+          ${{ steps.test_code.outputs.test_code }}
+          EOF
+          )
+          
+          if [ -z "$INSTRUCTIONS" ] || [ -z "$SOURCE_CODE" ] || [ -z "$TEST_CODE" ]; then
+            echo "Error: One or more required variables are not set."
+          exit 1
+          fi
+
+          # Assigning to USER_CONTENT with variable expansion
+          PAYLOAD="Please provide feedback on the following Java assignment.
+          
+          --- Assignment Instructions ---
+          ${INSTRUCTIONS}
+          
+          --- Source files ---          
+          ${SOURCE_CODE}
+          
+          --- Test files ---
+          ${TEST_CODE}"
+          
+          JSON_CONTENT=$(jq -n \
+          --argjson model "$OPENROUTER_MODEL" \
+          --arg system_prompt "$SYSTEM_PROMPT" \
+          --arg payload "$PAYLOAD" \
+          '{
+          models: $model,
+          messages: [
+            {role: "system", content: $system_prompt},
+            {role: "user", content: $payload}
+          ]
+          }')
+          
+          echo "$JSON_CONTENT"
+          
+          API_RESPONSE=$(echo "$JSON_CONTENT" | curl https://openrouter.ai/api/v1/chat/completions \
+          -H "Authorization: Bearer ${{ secrets.OPENROUTER_API_KEY }}" \
+          -H "Content-Type: application/json" \
+          -d @-)
+
+          echo "$API_RESPONSE"
+
+          FEEDBACK_CONTENT=$(echo "$API_RESPONSE" | jq -r '.choices[0].message.content')
+          echo "feedback<<EOF" >> $GITHUB_OUTPUT
+          echo "$FEEDBACK_CONTENT" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Post Feedback as PR Comment ✍️
+        uses: actions/github-script@v7
+        env:
+          FEEDBACK_BODY: ${{ steps.ai_feedback.outputs.feedback }}
+        with:
+          github-token: ${{secrets.GITHUB_TOKEN}}
+          script: |
+            // A unique signature to identify our comment
+            const signature = "";
+            const body = `${process.env.FEEDBACK_BODY}\n\n${signature}`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.issue.number;
+            
+            // Get all comments on the pull request
+            const { data: comments } = await github.rest.issues.listComments({
+            owner,
+            repo,
+            issue_number,
+            });
+            
+            // Find a previous comment by the action using the signature
+            const previousComment = comments.find(comment => comment.body.includes(signature));
+            
+            if (previousComment) {
+            // If a comment exists, update it
+            await github.rest.issues.updateComment({
+            owner,
+            repo,
+            comment_id: previousComment.id,
+            body,
+            });
+            console.log('Updated existing feedback comment.');
+            } else {
+            // If no comment exists, create a new one
+            await github.rest.issues.createComment({
+            owner,
+            repo,
+            issue_number,
+            body,
+            });
+            console.log('Posted new feedback comment.');
+            }
