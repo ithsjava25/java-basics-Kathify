@@ -1,2 +1,22 @@
-Main.java.html
+# IntelliJ IDEA
+.idea/
+*.iml
+
+# Byggmappar
+out/
+build/
 target/
+
+# OS-specifika filer (valfritt, men rekommenderas)
+.DS_Store
+Thumbs.db
+
+# Specifika filer du vill ignorera
+Main.java.html
+
+# IntelliJ interna filer (valfritt)
+/shelf/
+/workspace.xml
+/httpRequests/
+/dataSources/
+/dataSources.local.xml
