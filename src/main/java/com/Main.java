@@ -10,19 +10,20 @@ import com.example.api.ElpriserAPI;
 
 public class Main {
     public static void main(String[] args) {
-        // hjälp
+        // Om användaren vill se hjälp
         if (args.length > 0 && args[0].equals("--help")) {
             skrivUtHjalp();
             return;
         }
 
-        // idag och imorgon
+        // standardinställningar och elmområde
         String zone = "SE3";
         LocalDate date = LocalDate.now();
         LocalDate startDate = date.plusDays(1);
         boolean sorted = false;
         int chargingHours = 0;
 
+        // hantera argument
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
                 case "--date":
@@ -95,8 +96,8 @@ public class Main {
 
         // skriv ut timpriser
         for (ElpriserAPI.Elpris pris : priser) {
-            System.out.printf("%s: %.4f SEK/kWh%n",
-                    pris.timeStart().format(tidFormat), pris.sekPerKWh());
+            System.out.printf("%s: %.4f öre/kWh%n",
+                    pris.timeStart().format(tidFormat), pris.sekPerKWh() * 100);
         }
 
         for (ElpriserAPI.Elpris pris : priser) {
@@ -110,17 +111,17 @@ public class Main {
         System.out.println("Statistik");
         System.out.println("Datum: " + date);
         System.out.println("Zon: " + zone);
-        System.out.printf("Medelpris: %.4f SEK/kWh%n", medelpris);
-        System.out.printf("Billigast pris: %s - %.4f SEK/kWh%n",
-                billigast.timeStart().format(tidFormat), billigast.sekPerKWh());
-        System.out.printf("Dyrast pris: %s - %.4f SEK/kWh%n",
-                dyrast.timeStart().format(tidFormat), dyrast.sekPerKWh());
+        System.out.printf("Medelpris: %.4f öre/kWh%n", medelpris * 100);
+        System.out.printf("Billigast pris: %s - %.4f öre/kWh%n",
+                billigast.timeStart().format(tidFormat), billigast.sekPerKWh() * 100);
+        System.out.printf("Dyrast pris: %s - %.4f öre/kWh%n",
+                dyrast.timeStart().format(tidFormat), dyrast.sekPerKWh() * 100);
 
         // opt laddning
         if (chargingHours > 0) {
             beraknaLaddningsfonster(priser, chargingHours, tidFormat);
         } else {
-            
+
             // 2h, 4h, 8h
             for (int period : new int[]{2, 4, 8}) {
                 beraknaLaddningsfonster(priser, period, tidFormat);
@@ -149,8 +150,8 @@ public class Main {
         String startTid = priser.get(minIndex).timeStart().format(format);
         String slutTid = priser.get(minIndex + timmar - 1).timeStart().plusHours(1).format(format);
 
-        System.out.printf("Billigast pris %dh-period: %s - %s (%.4f SEK totalt)%n",
-                timmar, startTid, slutTid, minSum);
+        System.out.printf("Billigast pris %dh-period: %s - %s (%.4f öre totalt)%n",
+                timmar, startTid, slutTid, minSum * 100);
     }
 
     // hjälptext
@@ -162,6 +163,4 @@ public class Main {
         System.out.println("--charging 2h|4h|8h");
         System.out.println("--help");
     }
-
 }
-
