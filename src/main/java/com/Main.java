@@ -16,6 +16,7 @@ public class Main {
             return;
         }
 
+        // idag och imorgon
         String zone = "SE3";
         LocalDate date = LocalDate.now();
         LocalDate startDate = date.plusDays(1);
@@ -119,6 +120,7 @@ public class Main {
         if (chargingHours > 0) {
             beraknaLaddningsfonster(priser, chargingHours, tidFormat);
         } else {
+            
             // 2h, 4h, 8h
             for (int period : new int[]{2, 4, 8}) {
                 beraknaLaddningsfonster(priser, period, tidFormat);
@@ -126,7 +128,7 @@ public class Main {
         }
     }
 
-    // metod för laddningsfönster ??????????
+    // metod för laddningsfönster
     public static void beraknaLaddningsfonster(List<ElpriserAPI.Elpris> priser, int timmar, DateTimeFormatter format) {
         if (priser.size() < timmar) return;
 
@@ -162,3 +164,4 @@ public class Main {
     }
 
 }
+
