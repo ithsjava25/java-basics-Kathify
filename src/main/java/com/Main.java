@@ -6,11 +6,12 @@ import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import com.example.api.ElpriserAPI;
+import java.text.DecimalFormat;
+import java.text.DecimalFormatSymbols;
 
 public class Main {
     public static void main(String[] args) {
-        // Om användaren vill se hjälp
+        // se hjälp
         if (args.length > 0 && args[0].equals("--help")) {
             skrivUtHjalp();
             return;
@@ -62,6 +63,9 @@ public class Main {
             }
         }
 
+        // anropa formatOre
+        Main mainObj = new Main();
+
         // API o prisklass
         ElpriserAPI elpriserAPI = new ElpriserAPI();
         ElpriserAPI.Prisklass prisklass;
@@ -75,7 +79,7 @@ public class Main {
         // priser
         List<ElpriserAPI.Elpris> priser = new ArrayList<>(elpriserAPI.getPriser(date, prisklass));
         if (priser.isEmpty()) {
-            System.out.println("inga priser tillgangliga for " + date + " in zon " + zone + ".");
+            System.out.println("no prices available for " + date + " in zon " + zone + ".");
             return;
         }
 
@@ -96,8 +100,8 @@ public class Main {
 
         // skriv ut timpriser
         for (ElpriserAPI.Elpris pris : priser) {
-            System.out.printf("%s: %.4f öre/kWh%n",
-                    pris.timeStart().format(tidFormat), pris.sekPerKWh() * 100);
+            System.out.printf("%s: %s öre/kWh%n",
+                    pris.timeStart().format(tidFormat), mainObj.formatOre(pris.sekPerKWh()));
         }
 
         for (ElpriserAPI.Elpris pris : priser) {
@@ -111,26 +115,25 @@ public class Main {
         System.out.println("Statistik");
         System.out.println("Datum: " + date);
         System.out.println("Zon: " + zone);
-        System.out.printf("Medelpris: %.4f öre/kWh%n", medelpris * 100);
-        System.out.printf("Billigast pris: %s - %.4f öre/kWh%n",
-                billigast.timeStart().format(tidFormat), billigast.sekPerKWh() * 100);
-        System.out.printf("Dyrast pris: %s - %.4f öre/kWh%n",
-                dyrast.timeStart().format(tidFormat), dyrast.sekPerKWh() * 100);
+        System.out.printf("Medelpris: %s öre/kWh%n", mainObj.formatOre(medelpris));
+        System.out.printf("Billigast pris: %s - %s öre/kWh%n",
+                billigast.timeStart().format(tidFormat), mainObj.formatOre(billigast.sekPerKWh()));
+        System.out.printf("Dyrast pris: %s - %s öre/kWh%n",
+                dyrast.timeStart().format(tidFormat), mainObj.formatOre(dyrast.sekPerKWh()));
 
         // opt laddning
         if (chargingHours > 0) {
-            beraknaLaddningsfonster(priser, chargingHours, tidFormat);
+            beraknaLaddningsfonster(priser, chargingHours, tidFormat, mainObj);
         } else {
-
             // 2h, 4h, 8h
             for (int period : new int[]{2, 4, 8}) {
-                beraknaLaddningsfonster(priser, period, tidFormat);
+                beraknaLaddningsfonster(priser, period, tidFormat, mainObj);
             }
         }
     }
 
     // metod för laddningsfönster
-    public static void beraknaLaddningsfonster(List<ElpriserAPI.Elpris> priser, int timmar, DateTimeFormatter format) {
+    public static void beraknaLaddningsfonster(List<ElpriserAPI.Elpris> priser, int timmar, DateTimeFormatter format, Main mainObj) {
         if (priser.size() < timmar) return;
 
         double minSum = Double.MAX_VALUE;
@@ -150,8 +153,8 @@ public class Main {
         String startTid = priser.get(minIndex).timeStart().format(format);
         String slutTid = priser.get(minIndex + timmar - 1).timeStart().plusHours(1).format(format);
 
-        System.out.printf("Billigast pris %dh-period: %s - %s (%.4f öre totalt)%n",
-                timmar, startTid, slutTid, minSum * 100);
+        System.out.printf("Billigast pris %dh-period: %s - %s (%s öre totalt)%n",
+                timmar, startTid, slutTid, mainObj.formatOre(minSum));
     }
 
     // hjälptext
@@ -162,5 +165,13 @@ public class Main {
         System.out.println("--sorted");
         System.out.println("--charging 2h|4h|8h");
         System.out.println("--help");
+    }
+
+    // formatteringsmetod
+    public String formatOre(double sekPerKWh) {
+        double ore = sekPerKWh * 100.0;
+        DecimalFormatSymbols symbols = DecimalFormatSymbols.getInstance(java.util.Locale.of("sv", "SE"));
+        DecimalFormat df = new DecimalFormat("0.00", symbols);
+        return df.format(ore);
     }
 }
